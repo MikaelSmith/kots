@@ -434,11 +434,33 @@ type providers struct {
 	aks           bool
 }
 
-func ParseNodesForProviders(nodes *[]corev1.Node) providers {
+func stringifyProvider(p providers) string {
+	if p.microk8s {
+		return "micro"
+	} else if p.dockerDesktop {
+		return "dockerDesktop"
+	} else if p.eks {
+		return "eks"
+	} else if p.gke {
+		return "gke"
+	} else if p.digitalOcean {
+		return "digitalOcean"
+	} else if p.openShift {
+		return "openShift"
+	} else if p.kurl {
+		return "kurl"
+	} else if p.aks {
+		return "aks"
+	} else {
+		return ""
+	}
+}
+
+func ParseNodesForProviders(nodes []corev1.Node) (providers, string) {
 	foundProviders := providers{}
 	foundMaster := false
 
-	for _, node := range *nodes {
+	for _, node := range nodes {
 		for k, v := range node.ObjectMeta.Labels {
 			if k == "microk8s.io/cluster" && v == "true" {
 				foundProviders.microk8s = true
@@ -473,7 +495,9 @@ func ParseNodesForProviders(nodes *[]corev1.Node) providers {
 		foundProviders.eks = false
 	}
 
-	return foundProviders
+	stringProvider := stringifyProvider(foundProviders)
+
+	return foundProviders, stringProvider
 }
 
 func (ctx StaticCtx) distribution() string {
@@ -493,18 +517,7 @@ func (ctx StaticCtx) distribution() string {
 	}
 	nodes := nodeList.Items
 
-	foundProviders := ParseNodesForProviders(&nodes)
+	_, provider := ParseNodesForProviders(nodes)
 
-	// for _, node := range nodes {
-	// 	for k, v := range node.ObjectMeta.Labels {
-	// 		if k == "microk8s.io/cluster" && v == "true" {
-	// 			return "microk8s"
-	// 		}
-	// 	}
-	// }
-	if foundProviders.microk8s == true {
-		return "microk8s"
-	}
-
-	return ""
+	return provider
 }
