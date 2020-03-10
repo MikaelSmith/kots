@@ -27,8 +27,8 @@ import (
 	units "github.com/docker/go-units"
 	"github.com/pkg/errors"
 	"gopkg.in/yaml.v2"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	// corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
 	certUtil "k8s.io/client-go/util/cert"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
@@ -423,6 +423,59 @@ func (ctx StaticCtx) isKurl() bool {
 	return configMap != nil
 }
 
+type providers struct {
+	microk8s      bool
+	dockerDesktop bool
+	eks           bool
+	gke           bool
+	digitalOcean  bool
+	openShift     bool
+	kurl          bool
+	aks           bool
+}
+
+func ParseNodesForProviders(nodes *[]corev1.Node) providers {
+	foundProviders := providers{}
+	foundMaster := false
+
+	for _, node := range *nodes {
+		for k, v := range node.ObjectMeta.Labels {
+			if k == "microk8s.io/cluster" && v == "true" {
+				foundProviders.microk8s = true
+			} else if k == "kurl.sh/cluster" && v == "true" {
+				foundProviders.kurl = true
+			}
+			if k == "node-role.kubernetes.io/master" {
+				foundMaster = true
+			}
+			if k == "kubernetes.azure.com/role" {
+				foundProviders.aks = true
+			}
+		}
+
+		if node.Status.NodeInfo.OSImage == "Docker Desktop" {
+			foundProviders.dockerDesktop = true
+		}
+
+		if strings.HasPrefix(node.Spec.ProviderID, "digitalocean:") {
+			foundProviders.digitalOcean = true
+		}
+		if strings.HasPrefix(node.Spec.ProviderID, "aws:") {
+			foundProviders.eks = true
+		}
+		if strings.HasPrefix(node.Spec.ProviderID, "gce:") {
+			foundProviders.gke = true
+		}
+	}
+
+	if foundMaster {
+		// eks does not have masters within the node list
+		foundProviders.eks = false
+	}
+
+	return foundProviders
+}
+
 func (ctx StaticCtx) distribution() string {
 	cfg, err := config.GetConfig()
 	if err != nil {
@@ -434,18 +487,23 @@ func (ctx StaticCtx) distribution() string {
 		return ""
 	}
 
-	// var nodes []corev1.Node
-
-	nodes, err := clientset.CoreV1().Nodes().List(metav1.ListOptions{})
+	nodeList, err := clientset.CoreV1().Nodes().List(metav1.ListOptions{})
 	if err != nil {
 		return ""
 	}
-	for _, node := range nodes.Items {
-		for k, v := range node.ObjectMeta.Labels {
-			if k == "microk8s.io/cluster" && v == "true" {
-				return "microk8s"
-			}
-		}
+	nodes := nodeList.Items
+
+	foundProviders := ParseNodesForProviders(&nodes)
+
+	// for _, node := range nodes {
+	// 	for k, v := range node.ObjectMeta.Labels {
+	// 		if k == "microk8s.io/cluster" && v == "true" {
+	// 			return "microk8s"
+	// 		}
+	// 	}
+	// }
+	if foundProviders.microk8s == true {
+		return "microk8s"
 	}
 
 	return ""
