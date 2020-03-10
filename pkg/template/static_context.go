@@ -434,10 +434,19 @@ func (ctx StaticCtx) distribution() string {
 		return ""
 	}
 
+	// var nodes []corev1.Node
+
 	nodes, err := clientset.CoreV1().Nodes().List(metav1.ListOptions{})
 	if err != nil {
 		return ""
 	}
+	for _, node := range nodes.Items {
+		for k, v := range node.ObjectMeta.Labels {
+			if k == "microk8s.io/cluster" && v == "true" {
+				return "microk8s"
+			}
+		}
+	}
 
-	return string(nodes.Items[0].ObjectMeta.Name)
+	return ""
 }
