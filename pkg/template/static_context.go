@@ -28,6 +28,7 @@ import (
 	"github.com/pkg/errors"
 	"gopkg.in/yaml.v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	// corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
 	certUtil "k8s.io/client-go/util/cert"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
@@ -77,6 +78,7 @@ func (ctx StaticCtx) FuncMap() template.FuncMap {
 	funcMap["TLSKey"] = ctx.tlsKey
 
 	funcMap["IsKurl"] = ctx.isKurl
+	funcMap["Distribution"] = ctx.distribution
 
 	return funcMap
 }
@@ -419,4 +421,23 @@ func (ctx StaticCtx) isKurl() bool {
 	}
 
 	return configMap != nil
+}
+
+func (ctx StaticCtx) distribution() string {
+	cfg, err := config.GetConfig()
+	if err != nil {
+		return ""
+	}
+
+	clientset, err := kubernetes.NewForConfig(cfg)
+	if err != nil {
+		return ""
+	}
+
+	nodes, err := clientset.CoreV1().Nodes().List(metav1.ListOptions{})
+	if err != nil {
+		return ""
+	}
+
+	return string(nodes.Items[0].ObjectMeta.Name)
 }
