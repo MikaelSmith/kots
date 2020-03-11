@@ -449,6 +449,7 @@ func ParseNodesForProviders(nodes []corev1.Node) (providers, string) {
 			} else if k == "microk8s.io/cluster" && v == "true" {
 				foundProviders.microk8s = true
 				stringProvider = "micro_mike"
+			}
 			if k == "node-role.kubernetes.io/master" {
 				foundMaster = true
 			}
@@ -496,7 +497,6 @@ func CheckOpenShift(foundProviders *providers, apiResources []*metav1.APIResourc
 
 	return provider
 }
-
 
 func (ctx StaticCtx) distribution() string {
 	cfg, err := config.GetConfig()
