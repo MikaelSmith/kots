@@ -448,7 +448,7 @@ func ParseNodesForProviders(nodes []corev1.Node) (providers, string) {
 				stringProvider = "kurl"
 			} else if k == "microk8s.io/cluster" && v == "true" {
 				foundProviders.microk8s = true
-				stringProvider = "micro_mike"
+				stringProvider = "microk8s"
 			}
 			if k == "node-role.kubernetes.io/master" {
 				foundMaster = true
