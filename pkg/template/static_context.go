@@ -517,11 +517,21 @@ func (ctx StaticCtx) distribution() string {
 
 	foundProviders, workingProvider := analyze.ParseNodesForProviders(nodes)
 
-	discoveryClient, _ := discovery.NewDiscoveryClientForConfig(cfg)
+	if workingProvider != "" {
+		return workingProvider
+	}
 
-	_, apiResourceList, _ := discoveryClient.ServerGroupsAndResources()
+	discoveryClient, err := discovery.NewDiscoveryClientForConfig(cfg)
+	if err != nil {
+		return ""
+	}
+
+	_, apiResourceList, err := discoveryClient.ServerGroupsAndResources()
 
 	provider := analyze.CheckOpenShift(&foundProviders, apiResourceList, workingProvider)
+	if err != nil {
+		return ""
+	}
 
 	return provider
 }
