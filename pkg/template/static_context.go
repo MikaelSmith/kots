@@ -26,8 +26,8 @@ import (
 	sprig "github.com/Masterminds/sprig/v3"
 	units "github.com/docker/go-units"
 	"github.com/pkg/errors"
+	analyze "github.com/replicatedhq/troubleshoot/pkg/analyze"
 	"gopkg.in/yaml.v2"
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	discovery "k8s.io/client-go/discovery"
 	"k8s.io/client-go/kubernetes"
@@ -424,79 +424,79 @@ func (ctx StaticCtx) isKurl() bool {
 	return configMap != nil
 }
 
-type providers struct {
-	microk8s      bool
-	dockerDesktop bool
-	eks           bool
-	gke           bool
-	digitalOcean  bool
-	openShift     bool
-	kurl          bool
-	aks           bool
-}
+// type providers struct {
+// 	microk8s      bool
+// 	dockerDesktop bool
+// 	eks           bool
+// 	gke           bool
+// 	digitalOcean  bool
+// 	openShift     bool
+// 	kurl          bool
+// 	aks           bool
+// }
 
-func ParseNodesForProviders(nodes []corev1.Node) (providers, string) {
-	foundProviders := providers{}
-	foundMaster := false
-	stringProvider := ""
+// func ParseNodesForProviders(nodes []corev1.Node) (providers, string) {
+// 	foundProviders := providers{}
+// 	foundMaster := false
+// 	stringProvider := ""
 
-	for _, node := range nodes {
-		for k, v := range node.ObjectMeta.Labels {
+// 	for _, node := range nodes {
+// 		for k, v := range node.ObjectMeta.Labels {
 
-			if k == "kurl.sh/cluster" && v == "true" {
-				foundProviders.kurl = true
-				stringProvider = "kurl"
-			} else if k == "microk8s.io/cluster" && v == "true" {
-				foundProviders.microk8s = true
-				stringProvider = "microk8s"
-			}
-			if k == "node-role.kubernetes.io/master" {
-				foundMaster = true
-			}
-			if k == "kubernetes.azure.com/role" {
-				foundProviders.aks = true
-				stringProvider = "aks"
-			}
-		}
+// 			if k == "kurl.sh/cluster" && v == "true" {
+// 				foundProviders.kurl = true
+// 				stringProvider = "kurl"
+// 			} else if k == "microk8s.io/cluster" && v == "true" {
+// 				foundProviders.microk8s = true
+// 				stringProvider = "microk8s"
+// 			}
+// 			if k == "node-role.kubernetes.io/master" {
+// 				foundMaster = true
+// 			}
+// 			if k == "kubernetes.azure.com/role" {
+// 				foundProviders.aks = true
+// 				stringProvider = "aks"
+// 			}
+// 		}
 
-		if node.Status.NodeInfo.OSImage == "Docker Desktop" {
-			foundProviders.dockerDesktop = true
-			stringProvider = "dockerDesktop"
-		}
+// 		if node.Status.NodeInfo.OSImage == "Docker Desktop" {
+// 			foundProviders.dockerDesktop = true
+// 			stringProvider = "dockerDesktop"
+// 		}
 
-		if strings.HasPrefix(node.Spec.ProviderID, "digitalocean:") {
-			foundProviders.digitalOcean = true
-			stringProvider = "digitalOcean"
-		}
-		if strings.HasPrefix(node.Spec.ProviderID, "aws:") {
-			foundProviders.eks = true
-			stringProvider = "eks"
-		}
-		if strings.HasPrefix(node.Spec.ProviderID, "gce:") {
-			foundProviders.gke = true
-			stringProvider = "gke"
-		}
-	}
+// 		if strings.HasPrefix(node.Spec.ProviderID, "digitalocean:") {
+// 			foundProviders.digitalOcean = true
+// 			stringProvider = "digitalOcean"
+// 		}
+// 		if strings.HasPrefix(node.Spec.ProviderID, "aws:") {
+// 			foundProviders.eks = true
+// 			stringProvider = "eks"
+// 		}
+// 		if strings.HasPrefix(node.Spec.ProviderID, "gce:") {
+// 			foundProviders.gke = true
+// 			stringProvider = "gke"
+// 		}
+// 	}
 
-	if foundMaster {
-		// eks does not have masters within the node list
-		foundProviders.eks = false
-		stringProvider = ""
-	}
+// 	if foundMaster {
+// 		// eks does not have masters within the node list
+// 		foundProviders.eks = false
+// 		stringProvider = ""
+// 	}
 
-	return foundProviders, stringProvider
-}
+// 	return foundProviders, stringProvider
+// }
 
-func CheckOpenShift(foundProviders *providers, apiResources []*metav1.APIResourceList, provider string) string {
-	for _, resource := range apiResources {
-		if strings.Contains(resource.GroupVersion, "openshift") {
-			foundProviders.openShift = true
-			return "openShift"
-		}
-	}
+// func CheckOpenShift(foundProviders *providers, apiResources []*metav1.APIResourceList, provider string) string {
+// 	for _, resource := range apiResources {
+// 		if strings.Contains(resource.GroupVersion, "openshift") {
+// 			foundProviders.openShift = true
+// 			return "openShift"
+// 		}
+// 	}
 
-	return provider
-}
+// 	return provider
+// }
 
 func (ctx StaticCtx) distribution() string {
 	cfg, err := config.GetConfig()
@@ -515,13 +515,13 @@ func (ctx StaticCtx) distribution() string {
 	}
 	nodes := nodeList.Items
 
-	foundProviders, workingProvider := ParseNodesForProviders(nodes)
+	foundProviders, workingProvider := analyze.ParseNodesForProviders(nodes)
 
 	discoveryClient, _ := discovery.NewDiscoveryClientForConfig(cfg)
 
 	_, apiResourceList, _ := discoveryClient.ServerGroupsAndResources()
 
-	provider := CheckOpenShift(&foundProviders, apiResourceList, workingProvider)
+	provider := analyze.CheckOpenShift(&foundProviders, apiResourceList, workingProvider)
 
 	return provider
 }
