@@ -244,7 +244,7 @@ func Test_DeduplicateOnContent(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			req := require.New(t)
 
-			actualResources, actualPatches, err := deduplicateOnContent(test.files, test.excludeKotsKinds, "test")
+			actualResources, actualPatches, _, err := deduplicateOnContent(test.files, test.excludeKotsKinds, "test")
 			req.NoError(err)
 
 			assert.ElementsMatch(t, test.expectedResources, actualResources)

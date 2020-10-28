@@ -42,7 +42,7 @@ func (b *Base) WriteBase(options WriteOptions) error {
 		}
 	}
 
-	resources, patches, err := deduplicateOnContent(b.Files, options.ExcludeKotsKinds, b.Namespace)
+	resources, patches, kustomization, err := deduplicateOnContent(b.Files, options.ExcludeKotsKinds, b.Namespace)
 	if err != nil {
 		return errors.Wrap(err, "failed to deduplicate content")
 	}
@@ -93,15 +93,16 @@ func (b *Base) WriteBase(options WriteOptions) error {
 		kustomizeBases = append(kustomizeBases, base.Path)
 	}
 
-	kustomization := kustomizetypes.Kustomization{
-		TypeMeta: kustomizetypes.TypeMeta{
+	if kustomization.TypeMeta.APIVersion == "" {
+		kustomization.TypeMeta = kustomizetypes.TypeMeta{
 			APIVersion: "kustomize.config.k8s.io/v1beta1",
 			Kind:       "Kustomization",
-		},
-		Resources:             kustomizeResources,
-		PatchesStrategicMerge: kustomizePatches,
-		Bases:                 kustomizeBases,
+		}
 	}
+	// Explicitly don't merge these, KOTS controls resources.
+	kustomization.Resources = kustomizeResources
+	kustomization.PatchesStrategicMerge = kustomizePatches
+	kustomization.Bases = kustomizeBases
 	if b.Namespace != "" {
 		kustomization.Namespace = b.Namespace
 	}
@@ -183,9 +184,10 @@ func (b *Base) writeSkippedFiles(options WriteOptions) error {
 	return nil
 }
 
-func deduplicateOnContent(files []BaseFile, excludeKotsKinds bool, baseNS string) ([]BaseFile, []BaseFile, error) {
+func deduplicateOnContent(files []BaseFile, excludeKotsKinds bool, baseNS string) ([]BaseFile, []BaseFile, kustomizetypes.Kustomization, error) {
 	resources := []BaseFile{}
 	patches := []BaseFile{}
+	kustom := kustomizetypes.Kustomization{}
 
 	foundGVKNamesMap := map[string]bool{}
 
@@ -196,7 +198,7 @@ func deduplicateOnContent(files []BaseFile, excludeKotsKinds bool, baseNS string
 		if err != nil {
 			// should we do anything with errors here?
 			if _, ok := err.(ParseError); !ok {
-				return nil, nil, errors.Wrap(err, "failed to check if file should be included")
+				return nil, nil, kustom, errors.Wrap(err, "failed to check if file should be included")
 			}
 		}
 
@@ -204,21 +206,25 @@ func deduplicateOnContent(files []BaseFile, excludeKotsKinds bool, baseNS string
 			continue
 		}
 
-		if writeToKustomization {
-			thisGVKName := GetGVKWithNameAndNs(file.Content, baseNS)
-			found := foundGVKNamesMap[thisGVKName]
-
-			if !found || thisGVKName == "" {
-				resources = append(resources, file)
-				foundGVKNamesMap[thisGVKName] = true
-			} else {
-				patches = append(patches, file)
+		if IsKustomization(file.Content) {
+			if err := yaml.Unmarshal(file.Content, &kustom); err != nil {
+				return nil, nil, kustom, errors.Wrap(err, "failed unmarshaling Kustomization")
 			}
+			continue
 		}
 
+		thisGVKName := GetGVKWithNameAndNs(file.Content, baseNS)
+		found := foundGVKNamesMap[thisGVKName]
+
+		if !found || thisGVKName == "" {
+			resources = append(resources, file)
+			foundGVKNamesMap[thisGVKName] = true
+		} else {
+			patches = append(patches, file)
+		}
 	}
 
-	return resources, patches, nil
+	return resources, patches, kustom, nil
 }
 
 func convertToSingleDocBaseFiles(files []BaseFile) []BaseFile {
